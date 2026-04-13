@@ -15,6 +15,10 @@
             <div class="cbv-header__title-group">
               <div class="cbv-header__pilot-name">
                 <%= t("shared.pilot_name_hr1_full") %>
+                <% unless current_agency %>
+                  <span class="cbv-header__separator">|</span>
+                  <%= image_tag "ccx_logo.svg", alt: "CommunityCX", height: 28, class: "cbv-header__agency-logo" %>
+                <% end %>
               </div>
               <div class="cbv-header__subtitle">
                 <%= agency_translation("shared.agency_full_name") %>
