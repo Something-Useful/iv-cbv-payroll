@@ -49,6 +49,32 @@ services:
       - app_rails_tmp:/rails/tmp
       - app_rails_storage:/rails/storage
 
+  worker:
+    tty: true
+    build:
+      context: .
+      target: dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env.development.local
+    environment:
+      - DOCKERIZED=true
+      - DB_HOST=postgres
+      - DB_NAME=app
+      - DB_USERNAME=app
+      - DB_PASSWORD=secret123
+      - REDIS_URL=redis://redis:6379/1
+      - RAILS_ENV=development
+    command: bin/rails solid_queue:start
+    volumes:
+      - ./:/rails
+      - app_rails_nodemodules:/rails/node_modules
+      - app_rails_tmp:/rails/tmp
+      - app_rails_storage:/rails/storage
+
   redis:
     image: redis:alpine
     ports:
