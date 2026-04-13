@@ -43,6 +43,10 @@
             <% if has_logo %>
               <%= image_tag current_agency.logo_path, class: "cbv-header__agency-logo cbv-header__agency-logo--#{current_agency.id} tablet:display-none" %>
             <% end %>
+            <% unless current_agency %>
+              <span class="cbv-header__separator">|</span>
+              <%= image_tag "ccx_logo.svg", alt: "CommunityCX", height: 28, class: "cbv-header__agency-logo" %>
+            <% end %>
           <% end %>
         </em>
       </div>
