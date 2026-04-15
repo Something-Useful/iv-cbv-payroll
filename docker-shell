@@ -34,6 +34,8 @@ elif [[ "$1" == "jobs" ]]; then
     puts \"Failed: #{failed}\"
     puts \"Claimed: #{claimed}\"
   "
+elif [[ "$1" == "jobs-errors" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails runner "SolidQueue::FailedExecution.last(${2:-3}).each { |f| puts f.job.class_name; puts f.error.to_s; puts '---' }"
 elif [[ "$1" == "jobs-clear-all" ]]; then
   docker compose -f app/docker-compose.yml exec ${container} bin/rails runner "
     SolidQueue::FailedExecution.all.each(&:discard)
@@ -67,6 +69,7 @@ elif [[ "$1" == "help" ]]; then
   echo "  lint               Run RuboCop with auto-fix"
   echo "  test [file]        Run RSpec tests"
   echo "  jobs               Show job queue status"
+  echo "  jobs-errors [n]    Show last n failed job errors (default 3)"
   echo "  jobs-clear-all     Clear all pending and failed jobs"
   echo "  jobs-clear-pending Clear all pending jobs"
   echo "  jobs-clear-failed  Discard all failed jobs"
