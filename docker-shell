@@ -34,6 +34,14 @@ elif [[ "$1" == "jobs" ]]; then
     puts \"Failed: #{failed}\"
     puts \"Claimed: #{claimed}\"
   "
+elif [[ "$1" == "jobs-clear-all" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails runner "
+    SolidQueue::FailedExecution.all.each(&:discard)
+    SolidQueue::Job.where(finished_at: nil).each { |j| j.update(finished_at: Time.now) }
+    puts 'Done'
+  "
+elif [[ "$1" == "jobs-clear-pending" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails runner "SolidQueue::Job.where(finished_at: nil).each { |j| j.update(finished_at: Time.now) }; puts 'Done'"
 elif [[ "$1" == "jobs-clear-failed" ]]; then
   docker compose -f app/docker-compose.yml exec ${container} bin/rails runner "SolidQueue::FailedExecution.all.each(&:discard); puts 'Done'"
 elif [[ "$1" == "jobs-retry-failed" ]]; then
@@ -59,6 +67,8 @@ elif [[ "$1" == "help" ]]; then
   echo "  lint               Run RuboCop with auto-fix"
   echo "  test [file]        Run RSpec tests"
   echo "  jobs               Show job queue status"
+  echo "  jobs-clear-all     Clear all pending and failed jobs"
+  echo "  jobs-clear-pending Clear all pending jobs"
   echo "  jobs-clear-failed  Discard all failed jobs"
   echo "  jobs-retry-failed  Retry all failed jobs"
   echo "  env                Print environment variables"
