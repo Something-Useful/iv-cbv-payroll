@@ -1,0 +1,68 @@
+#!/bin/bash
+
+set -e
+
+container="app_rails"
+worker_container="worker"
+
+if [[ -z $1 ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bash
+elif [[ "$1" == "console" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails console
+elif [[ "$1" == "logs" ]]; then
+  docker compose -f app/docker-compose.yml logs ${2:---tail=100 -f}
+elif [[ "$1" == "logs-worker" ]]; then
+  docker compose -f app/docker-compose.yml logs ${worker_container} ${2:---tail=100 -f}
+elif [[ "$1" == "migrate" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails db:migrate
+elif [[ "$1" == "migrate-status" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails db:migrate:status
+elif [[ "$1" == "routes" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails routes ${@:2}
+elif [[ "$1" == "runner" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails runner "${*:2}"
+elif [[ "$1" == "lint" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} ./bin/rubocop -a
+elif [[ "$1" == "test" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} ./bin/rspec ${@:2}
+elif [[ "$1" == "jobs" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails runner "
+    pending = SolidQueue::Job.where(finished_at: nil).group(:class_name).count
+    failed = SolidQueue::FailedExecution.count
+    claimed = SolidQueue::ClaimedExecution.count
+    puts \"Pending: #{pending}\"
+    puts \"Failed: #{failed}\"
+    puts \"Claimed: #{claimed}\"
+  "
+elif [[ "$1" == "jobs-clear-failed" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails runner "SolidQueue::FailedExecution.all.each(&:discard); puts 'Done'"
+elif [[ "$1" == "jobs-retry-failed" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} bin/rails runner "SolidQueue::FailedExecution.all.each(&:retry); puts 'Done'"
+elif [[ "$1" == "env" ]]; then
+  docker compose -f app/docker-compose.yml exec ${container} printenv | sort
+elif [[ "$1" == "ps" ]]; then
+  docker compose -f app/docker-compose.yml ps
+elif [[ "$1" == "restart" ]]; then
+  docker compose -f app/docker-compose.yml down && docker compose -f app/docker-compose.yml up -d
+elif [[ "$1" == "help" ]]; then
+  echo "Usage: ./docker-shell [command]"
+  echo ""
+  echo "Commands:"
+  echo "  (none)             Open a bash shell in the app container"
+  echo "  console            Rails console"
+  echo "  logs               Tail app logs (pass container name as 2nd arg)"
+  echo "  logs-worker        Tail worker logs"
+  echo "  migrate            Run database migrations"
+  echo "  migrate-status     Show migration status"
+  echo "  routes             Show Rails routes"
+  echo "  runner <code>      Run arbitrary Rails runner code"
+  echo "  lint               Run RuboCop with auto-fix"
+  echo "  test [file]        Run RSpec tests"
+  echo "  jobs               Show job queue status"
+  echo "  jobs-clear-failed  Discard all failed jobs"
+  echo "  jobs-retry-failed  Retry all failed jobs"
+  echo "  env                Print environment variables"
+  echo "  ps                 Show running containers"
+  echo "  restart            Recreate containers (picks up env changes)"
+  echo "  help               Show this help"
+fi
