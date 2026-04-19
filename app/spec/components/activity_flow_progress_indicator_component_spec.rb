@@ -30,6 +30,32 @@ RSpec.describe ActivityFlowProgressIndicator, type: :component do
     )
   end
 
+  describe ".from_calculator" do
+    it "uses the calculator required_month_count" do
+      monthly_results = [
+        ActivityFlowProgressCalculator::MonthlyResult.new(
+          month: Date.new(2025, 12, 1),
+          total_hours: 84,
+          meets_requirements: true
+        ),
+        ActivityFlowProgressCalculator::MonthlyResult.new(
+          month: Date.new(2026, 1, 1),
+          total_hours: 20,
+          meets_requirements: false
+        )
+      ]
+      calculator = instance_double(
+        ActivityFlowProgressCalculator,
+        monthly_results: monthly_results,
+        required_month_count: 1
+      )
+
+      render_inline(described_class.from_calculator(calculator, variant: :renewal))
+
+      expect(page).to have_css("h2", text: "1/1 months completed")
+    end
+  end
+
   it "renders the title without description for application variants" do
     render_inline(component)
 
@@ -46,9 +72,10 @@ RSpec.describe ActivityFlowProgressIndicator, type: :component do
   it "renders the completion threshold and hours label" do
     render_inline(component)
 
-    expect(page).to have_content(
+    expect(page.find(".activity-flow-progress-indicator__progress-amount-container")).to have_text(
       "#{ActivityFlowProgressCalculator::PER_MONTH_HOURS_THRESHOLD} " \
-      "#{I18n.t("activity_flow_progress_indicator.hours")}"
+      "#{I18n.t("activity_flow_progress_indicator.hours")}",
+      normalize_ws: true
     )
   end
 
@@ -57,6 +84,56 @@ RSpec.describe ActivityFlowProgressIndicator, type: :component do
 
     progress = page.find(:css, ".activity-flow-progress-indicator__progress-bar-fill")
     expect(progress["style"]).to eq("width: 50.0%")
+  end
+
+  context "when monthly default unit is dollars" do
+    let(:monthly_result) do
+      ActivityFlowProgressCalculator::MonthlyResult.new(
+        month: reporting_month,
+        total_hours: 77,
+        total_earnings_cents: 597_00,
+        default_unit: :dollars,
+        meets_requirements: true
+      )
+    end
+
+    it "renders dollars for amount and threshold" do
+      render_inline(component)
+
+      row_text = page.find(".activity-flow-progress-indicator__progress-amount-container").text.squish
+
+      expect(row_text).to include("$597 / $580")
+      expect(row_text).not_to include(I18n.t("activity_flow_progress_indicator.hours"))
+      expect(page).to have_css(".activity-flow-progress-indicator__progress-bar--complete")
+      expect(page).to have_css(".activity-flow-progress-indicator__success-icon")
+    end
+
+    it "calculates progress width using dollars threshold" do
+      render_inline(component)
+
+      progress = page.find(:css, ".activity-flow-progress-indicator__progress-bar-fill")
+      expect(progress["style"]).to eq("width: 100%")
+    end
+  end
+
+  context "when hours and earnings both meet threshold" do
+    let(:monthly_result) do
+      ActivityFlowProgressCalculator::MonthlyResult.new(
+        month: reporting_month,
+        total_hours: 82,
+        total_earnings_cents: 620_00,
+        default_unit: :hours,
+        meets_requirements: true
+      )
+    end
+
+    it "keeps hours as the rendered unit" do
+      render_inline(component)
+
+      row_text = page.find(".activity-flow-progress-indicator__progress-amount-container").text.squish
+      expect(row_text).to include("82 / 80 #{I18n.t("activity_flow_progress_indicator.hours")}")
+      expect(row_text).not_to include("$620 / $580")
+    end
   end
 
   it "does not show the 'months completed' message" do

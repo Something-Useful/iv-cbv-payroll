@@ -99,6 +99,54 @@ RSpec.describe ActivityFlowProgressCalculator do
       end
     end
 
+    context "with renewal required-month thresholds" do
+      let(:flow) do
+        create(
+          :activity_flow,
+          reporting_window_type: "renewal",
+          reporting_window_months: 6,
+          volunteering_activities_count: 0,
+          job_training_activities_count: 0,
+          education_activities_count: 0
+        )
+      end
+      let(:reporting_months) { flow.reporting_months }
+
+      before do
+        stub_client_agency_config_value("sandbox", "renewal_required_months", 2)
+      end
+
+      it "meets requirements when the required number of months meet threshold" do
+        activity = create(:volunteering_activity, activity_flow: flow)
+        create(:volunteering_activity_month, volunteering_activity: activity, month: reporting_months.first.beginning_of_month, hours: 80)
+        create(:volunteering_activity_month, volunteering_activity: activity, month: reporting_months.second.beginning_of_month, hours: 80)
+
+        expect(result.meets_requirements).to be(true)
+      end
+
+      it "does not meet requirements when completed months are below the required count" do
+        activity = create(:volunteering_activity, activity_flow: flow)
+        create(:volunteering_activity_month, volunteering_activity: activity, month: reporting_months.first.beginning_of_month, hours: 80)
+
+        expect(result.meets_requirements).to be(false)
+      end
+
+      it "applies the required-month threshold to routing requirements" do
+        validated_activity = create(:volunteering_activity, activity_flow: flow, data_source: "validated")
+        create(:volunteering_activity_month, volunteering_activity: validated_activity, month: reporting_months.first.beginning_of_month, hours: 80)
+        create(:volunteering_activity_month, volunteering_activity: validated_activity, month: reporting_months.second.beginning_of_month, hours: 80)
+
+        expect(result.meets_routing_requirements).to be(true)
+      end
+
+      it "does not meet routing requirements when validated months are below the required count" do
+        validated_activity = create(:volunteering_activity, activity_flow: flow, data_source: "validated")
+        create(:volunteering_activity_month, volunteering_activity: validated_activity, month: reporting_months.first.beginning_of_month, hours: 80)
+
+        expect(result.meets_routing_requirements).to be(false)
+      end
+    end
+
     context "with employment" do
       let(:progress) { described_class.new(flow).overall_result }
 
@@ -403,10 +451,91 @@ RSpec.describe ActivityFlowProgressCalculator do
 
     it "returns empty results for all months when no activities exist" do
       expect(result).to contain_exactly(
-        have_attributes(month: reporting_range_months.first, total_hours: 0, meets_requirements: false),
-        have_attributes(month: reporting_range_months.second, total_hours: 0, meets_requirements: false),
-        have_attributes(month: reporting_range_months.third, total_hours: 0, meets_requirements: false),
+        have_attributes(month: reporting_range_months.first, total_hours: 0, total_earnings_cents: 0, default_unit: :hours, meets_requirements: false),
+        have_attributes(month: reporting_range_months.second, total_hours: 0, total_earnings_cents: 0, default_unit: :hours, meets_requirements: false),
+        have_attributes(month: reporting_range_months.third, total_hours: 0, total_earnings_cents: 0, default_unit: :hours, meets_requirements: false),
       )
+    end
+
+    context "when a month is complete by earnings only" do
+      let(:flow) { create(:activity_flow, reporting_window_months: 1) }
+      let(:month) { flow.reporting_window_range.begin }
+      let!(:payroll_account) { create(:payroll_account, :pinwheel_fully_synced, flow: flow, aggregator_account_id: "unit-test-account") }
+
+      before do
+        create(
+          :activity_flow_monthly_summary,
+          activity_flow: flow,
+          payroll_account: payroll_account,
+          month: month.beginning_of_month,
+          total_w2_hours: 77.0,
+          accrued_gross_earnings_cents: 597_00
+        )
+      end
+
+      it "uses dollars as the monthly default unit" do
+        monthly_result = result.first
+
+        expect(monthly_result).to have_attributes(
+          month: month,
+          total_hours: 77.0,
+          total_earnings_cents: 597_00,
+          default_unit: :dollars,
+          meets_requirements: true
+        )
+      end
+    end
+
+    context "when both hours and earnings meet thresholds" do
+      let(:flow) { create(:activity_flow, reporting_window_months: 1) }
+      let(:month) { flow.reporting_window_range.begin }
+      let!(:payroll_account) { create(:payroll_account, :pinwheel_fully_synced, flow: flow, aggregator_account_id: "unit-test-account-2") }
+
+      before do
+        create(
+          :activity_flow_monthly_summary,
+          activity_flow: flow,
+          payroll_account: payroll_account,
+          month: month.beginning_of_month,
+          total_w2_hours: 82.0,
+          accrued_gross_earnings_cents: 620_00
+        )
+      end
+
+      it "keeps hours as the monthly default unit" do
+        monthly_result = result.first
+
+        expect(monthly_result).to have_attributes(
+          default_unit: :hours,
+          meets_requirements: true
+        )
+      end
+    end
+
+    context "when a month is below both thresholds" do
+      let(:flow) { create(:activity_flow, reporting_window_months: 1) }
+      let(:month) { flow.reporting_window_range.begin }
+      let!(:payroll_account) { create(:payroll_account, :pinwheel_fully_synced, flow: flow, aggregator_account_id: "unit-test-account-3") }
+
+      before do
+        create(
+          :activity_flow_monthly_summary,
+          activity_flow: flow,
+          payroll_account: payroll_account,
+          month: month.beginning_of_month,
+          total_w2_hours: 77.0,
+          accrued_gross_earnings_cents: 570_00
+        )
+      end
+
+      it "uses hours as the default unit and remains incomplete" do
+        monthly_result = result.first
+
+        expect(monthly_result).to have_attributes(
+          default_unit: :hours,
+          meets_requirements: false
+        )
+      end
     end
 
     context "when there are job training activities within the reporting range" do
