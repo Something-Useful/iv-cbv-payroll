@@ -257,6 +257,29 @@ This translation import system allows for efficient management of translations a
 * Ruby dependency checks: `bundle exec rake bundler:audit`
 * JS dependency checks: `bundle exec rake npm:audit`
 
+## Running tests via Docker
+
+If you don't have the native Ruby setup, you can run tests in Docker. From the `app` directory:
+
+```bash
+# Run a specific test file
+docker compose run --rm -e RAILS_ENV=test app_rails ./bin/rspec spec/path/to_spec.rb
+
+# Run a specific example by line number
+docker compose run --rm -e RAILS_ENV=test app_rails ./bin/rspec spec/path/to_spec.rb:42
+
+# Run the full test suite
+docker compose run --rm -e RAILS_ENV=test app_rails ./bin/rspec
+
+# Prepare the test database (run once, or after migrations)
+docker compose run --rm -e RAILS_ENV=test app_rails bin/rails db:test:prepare
+
+# Run linter
+docker compose run --rm app_rails ./bin/rubocop
+```
+
+Note: The first run may be slow as the Docker image builds and gems install.
+
 ## Manual Testing
 If you're new to CBV, here's a summary of how to get started navigating the app.
 1. First, contact someone on the team to get you set up to log in.
