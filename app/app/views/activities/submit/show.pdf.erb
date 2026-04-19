@@ -67,7 +67,7 @@
     <% end %>
     <% @community_service_activities.each do |activity| %>
       <% date_value = activity.date ? l(activity.date) : not_provided %>
-      <%= table.with_row activity.organization_name.presence || not_provided, activity.hours || 0, date_value %>
+      <%= table.with_row activity.organization_name.presence || not_provided, activity.volunteering_activity_months.sum(:hours), date_value %>
     <% end %>
   <% end %>
 <% else %>
